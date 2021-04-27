@@ -380,7 +380,7 @@ function draw_coordinates(point){
 	context.arc(center_x, center_y, min_side*0.45, 0, 2*Math.PI);
 	context.stroke();
 
-	for(radius = 0.5; radius < 100; radius += 0.5){
+	for(radius = 0.5; radius < 20; radius += 0.5){
 		plot_circle(hyperbolic_circle(point, radius), "#AA0000");
 	}
 
