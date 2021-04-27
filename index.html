@@ -1,0 +1,457 @@
+<html>
+<head>
+<title>Poincare Disk Geodesic Coordinates</title>
+</head>
+<body style="margin: 0px; padding: 0px;">
+<script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+<script id="MathJax-script" src="https://cdn.jsdelivr.net/npm/mathjax@3.0.1/es5/tex-mml-chtml.js"></script>
+<script>
+const determinant = m => 
+	m.length == 1 ?
+	m[0][0] :
+	m.length == 2 ? 
+	m[0][0]*m[1][1]-m[0][1]*m[1][0] :
+	m[0].reduce((r,e,i) => 
+	r+(-1)**(i+2)*e*determinant(m.slice(1).map(c => 
+	c.filter((_,j) => i != j))),0)
+
+function set_text_size(size){
+	context.font = size.toString() + "px Arial";
+	text_size = size;
+}
+
+function canvas_center_text(text, coord, max_width){
+	var size;
+	var new_size;
+
+	size = context.measureText(text);
+	if(size.width > max_width){
+		new_size = text_size*max_width/size.width;
+		set_text_size(new_size);
+		coord[0] -= max_width/2;
+	} else {
+		coord[0] -= size.width/2;
+	}
+	coord[1] += text_size/3;
+	context.fillText(text, coord[0], coord[1]);
+}
+
+function get_canvas_coord(point){
+	return [(point[0] + 1)*min_side*0.45 + 0.05*min_side + (canvas.width - min_side)/2, (1 - point[1])*min_side*0.45 + (canvas.height - min_side)/2 + 0.05*min_side];
+}
+
+function get_param_coord(point){
+	return [(point[0] + (min_side - canvas.width)/2 - 0.05*min_side)/(min_side*0.45) - 1, (point[1] + (min_side - canvas.height)/2 - 0.05*min_side)/(-min_side*0.45) + 1];
+}
+
+function plot_point(point, color = "#000000"){
+	var screen_coord;
+	var dist;
+
+	dist = point[0]*point[0] + point[1]*point[1];
+
+	screen_coord = get_canvas_coord(point);
+	context.beginPath();
+	context.arc(screen_coord[0], screen_coord[1], (1 - dist)*8, 0, 2*Math.PI, false);
+	context.lineWidth = 1;
+	context.strokeStyle = color;
+	context.fillStyle = color;
+	context.fill();
+	context.stroke();
+}
+
+function plot_line(point0, point1, color = "#000000"){
+	var screen_coord0;
+	var screen_coord1;
+
+	screen_coord0 = get_canvas_coord(point0);
+	screen_coord1 = get_canvas_coord(point1);
+	context.beginPath();
+	context.lineWidth = 1;
+	context.strokeStyle = color;
+	context.moveTo(screen_coord0[0], screen_coord0[1]);
+	context.lineTo(screen_coord1[0], screen_coord1[1]);
+	context.stroke();
+}
+
+function plot_circle(circle, color = "#000000"){
+	var screen_coord;
+
+	screen_coord = get_canvas_coord(circle[0]);
+	context.beginPath();
+	context.arc(screen_coord[0], screen_coord[1], circle[1]*min_side*0.45, 0, 2*Math.PI, false);
+	context.lineWidth = 1;
+	context.strokeStyle = color;
+	context.stroke();
+}
+
+function circle_from_three_points(point0, point1, point2){
+	var m0;
+	var m1;
+	var m2;
+	var q;
+	var center_x;
+	var center_y;
+	var radius;
+
+	m0 = [[point0[0], point0[1], 1], [point1[0], point1[1], 1], [point2[0], point2[1], 1]];
+	m1 = [[point0[0]*point0[0] + point0[1]*point0[1], point0[1], 1],
+	      [point1[0]*point1[0] + point1[1]*point1[1], point1[1], 1],
+	      [point2[0]*point2[0] + point2[1]*point2[1], point2[1], 1]];
+	m2 = [[point0[0]*point0[0] + point0[1]*point0[1], point0[0], 1],
+	      [point1[0]*point1[0] + point1[1]*point1[1], point1[0], 1],
+	      [point2[0]*point2[0] + point2[1]*point2[1], point2[0], 1]];
+	
+	q = determinant(m0);
+	center_x = determinant(m1)/(2*q);
+	center_y = -determinant(m2)/(2*q);
+
+	radius = Math.sqrt((center_x - point0[0])*(center_x - point0[0]) + (center_y - point0[1])*(center_y - point0[1]));
+
+	return [[center_x, center_y], radius];
+}
+
+function hyperbolic_line(point0, point1){
+	var a;
+	var b;
+	var q;
+	var d0;
+	var d1;
+	var center_x;
+	var center_y;
+	var radius;
+
+	q = point0[0]*point1[1] - point1[0]*point0[1];
+	a = -((point0[0]*point0[0] + point0[1]*point0[1] + 1)*point1[1] - (point1[0]*point1[0] + point1[1]*point1[1] + 1)*point0[1])/q;
+	b = ((point0[0]*point0[0] + point0[1]*point0[1] + 1)*point1[0] - (point1[0]*point1[0] + point1[1]*point1[1] + 1)*point0[0])/q;
+	center_x = -a/2;
+	center_y = -b/2;
+	radius = Math.sqrt((a*a + b*b)/4 - 1);
+
+	return [[center_x, center_y], radius];
+}
+
+function hyperbolic_line_segment(point0, point1, color = "#000000"){
+	var angle0;
+	var angle1;
+	var min_angle;
+	var max_angle;
+	var circle;
+	var center;
+	var radius;
+	var screen_coord;
+
+	circle = hyperbolic_line(point0, point1);
+	center = circle[0];
+	radius = circle[1];
+	angle0 = Math.atan2(point0[1] - center[1], point0[0] - center[0]);
+	angle1 = Math.atan2(point1[1] - center[1], point1[0] - center[0]);
+	if((angle0 - angle1 + 2*Math.PI)%(2*Math.PI) < (angle1 - angle0 + 2*Math.PI)%(2*Math.PI)){
+		min_angle = angle1;
+		max_angle = angle0;
+	} else {
+		min_angle = angle0;
+		max_angle = angle1;
+	}
+	screen_coord = get_canvas_coord(center);
+	context.beginPath();
+	context.arc(screen_coord[0], screen_coord[1], radius*min_side*0.45, -max_angle, -min_angle, false);
+	if(color == "#000000"){
+		context.lineWidth = 1;
+	} else {
+		context.lineWidth = 1;
+	}
+	context.strokeStyle = color;
+	context.stroke();
+}
+
+function hyperbolic_segment_angle(point, m){
+	var m;
+	var q;
+	var center = [0, 0];
+	var radius;
+
+	q = point[0] + point[1]*m;
+	center[0] = (point[0]*point[0] - point[1]*point[1] + 1)/(2*q) + (m*point[0]*point[1])/q;
+	center[1] = m*center[0] - m*point[0] + point[1];
+
+	radius = Math.sqrt((point[0] - center[0])*(point[0] - center[0]) + (point[1] - center[1])*(point[1] - center[1]));
+	return [center, radius];
+}
+
+function hyperbolic_dist(point0, point1){
+	var len0;
+	var len1;
+	var e_dist;
+
+	len0 = point0[0]*point0[0] + point0[1]*point0[1];
+	len1 = point1[0]*point1[0] + point1[1]*point1[1];
+	e_dist = (point0[0] - point1[0])*(point0[0] - point1[0]) + (point0[1] - point1[1])*(point0[1]*point1[1]);
+	return Math.acosh(1 + 2*e_dist/((1 - len0)*(1 - len1)));
+}
+
+function invert_point(point, inversion_circle){
+	var norm_point = [0, 0];
+	var d;
+	var new_norm_point = [0, 0];
+	var new_point = [0, 0];
+
+	norm_point[0] = (point[0] - inversion_circle[0][0])/inversion_circle[1];
+	norm_point[1] = (point[1] - inversion_circle[0][1])/inversion_circle[1];
+	d = norm_point[0]*norm_point[0] + norm_point[1]*norm_point[1];
+	new_norm_point[0] = norm_point[0]/d;
+	new_norm_point[1] = norm_point[1]/d;
+	new_point[0] = new_norm_point[0]*inversion_circle[1] + inversion_circle[0][0];
+	new_point[1] = new_norm_point[1]*inversion_circle[1] + inversion_circle[0][1];
+
+	return new_point;
+}
+
+function get_animation_circle(t){
+	var angle0 = -0.6486863009156708;
+	var angle1 = -Math.PI/2;
+	var angle;
+	var circle;
+
+	angle = angle0*t + angle1*(1 - t);
+	animation_circle = hyperbolic_line([0, 1], [Math.cos(angle), Math.sin(angle)]);
+}
+
+function animate_point(point, t){
+	if(animation_type == "bottom_right" || animation_type == "bottom_left"){
+		point[1] = -point[1];
+	}
+	point = invert_point(point, animation_circle);
+	point[0] = -point[0];
+	if(animation_type == "bottom_right" || animation_type == "bottom_left"){
+		point[1] = -point[1];
+	}
+
+	return point;
+}
+
+function invert_circle(circle, inversion_circle){
+	var norm_center = [0, 0];
+	var norm_radius;
+	var q;
+	var new_norm_center = [0, 0];
+	var new_norm_radius;
+	var new_center = [0, 0];
+	var new_radius;
+
+	norm_center[0] = (circle[0][0] - inversion_circle[0][0])/inversion_circle[1];
+	norm_center[1] = (circle[0][1] - inversion_circle[0][1])/inversion_circle[1];
+	norm_radius = circle[1]/inversion_circle[1];
+
+	q = Math.abs(norm_center[0]*norm_center[0] + norm_center[1]*norm_center[1] - norm_radius*norm_radius);
+	new_norm_center[0] = norm_center[0]/q;
+	new_norm_center[1] = norm_center[1]/q;
+	new_norm_radius = norm_radius/q;
+
+	new_radius = new_norm_radius*inversion_circle[1];
+	new_center[0] = new_norm_center[0]*inversion_circle[1] + inversion_circle[0][0];
+	new_center[1] = new_norm_center[1]*inversion_circle[1] + inversion_circle[0][1];
+
+	return [new_center, new_radius];
+}
+
+function hyperbolic_circle(center, radius){
+	var d;
+	var k;
+	var r;
+	var half_way = [0, 0];
+	var separator;
+
+	d = Math.sqrt(center[0]*center[0] + center[1]*center[1]);
+	k = Math.sqrt((1 + d)/(1 - d));
+	r = (k - 1)/(k + 1);
+	half_way[0] = center[0]*r/d;
+	half_way[1] = center[1]*r/d;
+	separator = hyperbolic_segment_angle(half_way, center[1]/center[0]);
+	return invert_circle([[0, 0], (Math.exp(radius) - 1)/(Math.exp(radius) + 1)], separator);
+}
+
+function circle_intersections(circle0, circle1){
+	var d;
+	var l;
+	var h;
+	var dy;
+	var dx;
+	var point0;
+	var point1;
+
+	d = Math.sqrt((circle0[0][0] - circle1[0][0])*(circle0[0][0] - circle1[0][0]) + (circle0[0][1] - circle1[0][1])*(circle0[0][1] - circle1[0][1]));
+	l = (circle0[1]*circle0[1] - circle1[1]*circle1[1] + d*d)/(2*d);
+	h = Math.sqrt(circle0[1]*circle0[1] - l*l);
+
+	dy = circle1[0][1] - circle0[0][1];
+	dx = circle1[0][0] - circle0[0][0];
+	point0 = [l/d*dx + h/d*dy + circle0[0][0], l/d*dy - h/d*dx + circle0[0][1]];
+	point1 = [l/d*dx - h/d*dy + circle0[0][0], l/d*dy + h/d*dx + circle0[0][1]];
+
+	return [point0, point1];
+}
+
+function hyperbolic_point_angle_dist(point, angle, dist, do_draw, color = "#000000"){
+	var h_circ;
+	var h_seg;
+	var intersections;
+	var angle0;
+	var angle1;
+	var min_angle;
+	var max_angle;
+	var return_value;
+	var screen_coord;
+
+	h_circ = hyperbolic_circle(point, dist);
+	h_seg = hyperbolic_segment_angle(point, -Math.cos(angle)/Math.sin(angle));
+	intersections = circle_intersections(h_circ, h_seg);
+	if((intersections[0][0] - point[0])*Math.cos(angle) + (intersections[0][1] - point[1])*Math.sin(angle) > 0){
+		return_value = intersections[0];
+	} else {
+		return_value = intersections[1];
+	}
+	if(!do_draw){
+		return [return_value, 0];
+	}
+	angle0 = Math.atan2(return_value[1] - h_seg[0][1], return_value[0] - h_seg[0][0]);
+	angle1 = Math.atan2(point[1] - h_seg[0][1], point[0] - h_seg[0][0]);
+	if((angle0 - angle1 + Math.PI*2)%(Math.PI*2) < (angle1 - angle0 + Math.PI*2)%(Math.PI*2)){
+		min_angle = angle1;
+		max_angle = angle0;
+	} else {
+		min_angle = angle0;
+		max_angle = angle1;
+	}
+	screen_coord = get_canvas_coord(h_seg[0]);
+	context.beginPath();
+	if(color == "#000000"){
+		context.lineWidth = 1;
+	} else {
+		context.lineWidth = 3;
+	}
+	context.strokeStyle = color;
+	context.arc(screen_coord[0], screen_coord[1], h_seg[1]*min_side*0.45, -max_angle, -min_angle, false);
+	context.stroke();
+	angle0 -= Math.PI/2;
+	if(Math.cos(angle0)*Math.cos(angle) + Math.sin(angle0)*Math.sin(angle) < 0){
+		angle0 += Math.PI;
+	}
+	return [return_value, angle0];
+}
+
+function text_in_circle(text, circle){
+	var text_location;
+	var screen_radius;
+
+	text_location = get_canvas_coord(circle[0]);
+	screen_radius = circle[1]*min_side*0.45;
+	set_text_size(screen_radius*4/5);
+	canvas_center_text(text, text_location, screen_radius*6/5);
+}
+
+function signed_coeff(num){
+	if(num == 1){
+		return "+";
+	} else if(num >= 0){
+		return "+" + num.toString();
+	} else {
+		return num.toString();
+	}
+}
+
+function coeff(num){
+	if(num == 1){
+		return "";
+	} else {
+		return num.toString();
+	}
+}
+
+function draw_coordinates(point){
+	var angle;
+	var radius;
+
+	context.fillStyle = "#FFFFFF";
+	context.fillRect(0, 0, canvas.width, canvas.height);
+
+	context.fillStyle = "#000000";
+	context.beginPath();
+	context.arc(center_x, center_y, min_side*0.45, 0, 2*Math.PI);
+	context.stroke();
+
+	for(radius = 0.5; radius < 100; radius += 0.5){
+		plot_circle(hyperbolic_circle(point, radius), "#AA0000");
+	}
+
+	for(angle = Math.PI/16; angle < 2*Math.PI + Math.PI/16; angle += Math.PI/8){
+		geodesic = hyperbolic_segment_angle(point, Math.sin(angle)/Math.cos(angle));
+		intersections = circle_intersections(geodesic, [[0.0, 0], 1]);
+		hyperbolic_line_segment(intersections[0], intersections[1], "#00AA00");
+	}
+}
+
+function canvas_click(event){
+	var click_x;
+	var click_y;
+	var rect;
+
+	rect = canvas.getBoundingClientRect();
+	click_x = event.clientX - rect.left;
+	click_y = event.clientY - rect.top;
+	draw_coord = get_param_coord([click_x, click_y]);
+	if(draw_coord[0]*draw_coord[0] + draw_coord[1]*draw_coord[1] < 1){
+		draw_coordinates(draw_coord);
+	}
+}
+
+function getTouchPos(canvasDom, touchEvent){
+	var rect = canvasDom.getBoundingClientRect();
+	return {
+		x: touchEvent.touches[0].clientX - rect.left,
+		y: touchEvent.touches[0].clientY - rect.top
+	};
+}
+
+function start(){
+	canvas = document.getElementById("canvas");
+	canvas.width = canvas.clientWidth;
+	canvas.height = canvas.clientHeight;
+	center_x = canvas.width/2;
+	center_y = canvas.height/2;
+	if(canvas.width < canvas.height){
+		min_side = canvas.width;
+		max_side = canvas.height;
+	} else {
+		min_side = canvas.height;
+		max_side = canvas.width;
+	}
+	context = canvas.getContext("2d", {alpha: false});
+	side_lengths = 1.092;
+	render_depth = 8;
+	text_depth = 6;
+	frame_rate = 30;
+	branch_angle = Math.PI/3;
+	x_vec = [1, 0];
+	y_vec = [0, 1];
+
+	draw_coord = [0.01, 0.01];
+
+	draw_coordinates(draw_coord);
+	canvas.addEventListener("mousemove", canvas_click);
+	canvas.addEventListener("touchstart", function(e){
+		var mousePos = getTouchPos(canvas, e);
+		var touch = e.touches[0];
+		var mouseEvent = new MouseEvent("mouseover", {
+			clientX: touch.clientX,
+			clientY: touch.clientY
+		});
+	});
+}
+
+document.addEventListener("DOMContentLoaded", start);
+
+</script>
+<canvas id="canvas" style="width:100%; height:80%; display: block;"></canvas>
+</body>
+</html>
